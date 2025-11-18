@@ -1,5 +1,5 @@
-
 import React, { useState, useRef, useEffect } from 'react';
+import { createRoot } from 'react-dom/client';
 import { GeneratedContent, ContentType, MultipleChoiceQuestion, SentenceScrambleItem, ParagraphScrambleItem, PassageResult } from '../types';
 import { Card } from './common/Card';
 
@@ -470,8 +470,9 @@ export const ContentDisplay: React.FC<ContentDisplayProps> = ({ results, title, 
 
         const tempRoot = document.createElement('div');
         printableElement.appendChild(tempRoot);
-        const { createRoot } = await import('react-dom/client');
-        createRoot(tempRoot).render(<PrintableContent results={results} title={title} />);
+        
+        const root = createRoot(tempRoot);
+        root.render(<PrintableContent results={results} title={title} />);
         
         await new Promise(resolve => setTimeout(resolve, 100));
 
