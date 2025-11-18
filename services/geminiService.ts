@@ -31,6 +31,7 @@ const generateContentForSinglePassage = async (
   grade: string
 ): Promise<GeneratedContent> => {
 
+  // --- Prompts and Schemas Definition ---
   const vocabularyPrompt = `From the following English text, extract key vocabulary suitable for a ${grade} student. Provide the Korean translation for each word.
   
   English Text: "${englishText}"`;
@@ -45,8 +46,6 @@ const generateContentForSinglePassage = async (
           required: ['word', 'meaning']
       }
   };
-
-  const vocabularyPromise = generateWithSchema<{word: string, meaning: string}[]>(vocabularyPrompt, vocabSchema).then(items => items.map(item => ({...item, id: crypto.randomUUID()})));
 
   const translationPrompt = `Align the following English text and its Korean translation sentence by sentence.
   
@@ -63,7 +62,6 @@ const generateContentForSinglePassage = async (
           required: ['english', 'korean']
       }
   };
-  const translatedSentencesPromise = generateWithSchema<{english: string, korean: string}[]>(translationPrompt, translationSchema).then(items => items.map(item => ({...item, id: crypto.randomUUID()})));
 
   const multipleChoicePrompt = `From the following English text, create a worksheet with multiple-choice questions focusing on key vocabulary and grammar. For each question, provide a sentence with two options in the format "[option1/option2]". Also provide the correct option as the answer.
   
@@ -79,7 +77,6 @@ const generateContentForSinglePassage = async (
           required: ['sentence', 'answer']
       }
   };
-  const multipleChoicePromise = generateWithSchema<{sentence: string, answer: string}[]>(multipleChoicePrompt, mcqSchema).then(items => items.map(item => ({...item, id: crypto.randomUUID()})));
   
   const sentenceScramblePrompt = `For each sentence in the provided English text, scramble the words or phrases.
   
@@ -95,7 +92,6 @@ const generateContentForSinglePassage = async (
           required: ['scrambled', 'correct']
       }
   };
-  const sentenceScramblePromise = generateWithSchema<{scrambled: string[], correct: string}[]>(sentenceScramblePrompt, scrambleSchema).then(items => items.map(item => ({...item, id: crypto.randomUUID()})));
 
   const paragraphScramblePrompt = `Divide the following English text into four logical paragraphs. Then, present them in a scrambled order and provide the correct sequence.
   
@@ -108,7 +104,6 @@ const generateContentForSinglePassage = async (
       },
       required: ['scrambledParagraphs', 'correctOrder']
   };
-  const paragraphScramblePromise = generateWithSchema<{scrambledParagraphs: string[], correctOrder: number[]}>(paragraphScramblePrompt, paraScrambleSchema).then(item => ({...item, id: crypto.randomUUID()}));
   
   const analysisPrompt = `Analyze the following English text for a ${grade} student. Provide:
 1. A concise topic in Korean.
@@ -127,18 +122,26 @@ English Text: "${englishText}"`;
         },
         required: ['koreanTopic', 'englishTitle', 'koreanSummary', 'textFlow']
     };
-    const analysisPromise = generateWithSchema<{koreanTopic: string, englishTitle: string, koreanSummary: string, textFlow: string[]}>(analysisPrompt, analysisSchema);
+    
+  // --- Sequential Generation ---
+  
+  const vocabularyData = await generateWithSchema<{word: string, meaning: string}[]>(vocabularyPrompt, vocabSchema);
+  const vocabulary = vocabularyData.map(item => ({...item, id: crypto.randomUUID()}));
+  
+  const translatedSentencesData = await generateWithSchema<{english: string, korean: string}[]>(translationPrompt, translationSchema);
+  const translatedSentences = translatedSentencesData.map(item => ({...item, id: crypto.randomUUID()}));
 
+  const multipleChoiceWorksheetData = await generateWithSchema<{sentence: string, answer: string}[]>(multipleChoicePrompt, mcqSchema);
+  const multipleChoiceWorksheet = multipleChoiceWorksheetData.map(item => ({...item, id: crypto.randomUUID()}));
 
-  const [vocabulary, translatedSentences, multipleChoiceWorksheet, sentenceScrambleWorksheet, paragraphScrambleWorksheet, analysisResult] = await Promise.all([
-      vocabularyPromise,
-      translatedSentencesPromise,
-      multipleChoicePromise,
-      sentenceScramblePromise,
-      paragraphScramblePromise,
-      analysisPromise
-  ]);
+  const sentenceScrambleWorksheetData = await generateWithSchema<{scrambled: string[], correct: string}[]>(sentenceScramblePrompt, scrambleSchema);
+  const sentenceScrambleWorksheet = sentenceScrambleWorksheetData.map(item => ({...item, id: crypto.randomUUID()}));
 
+  const paragraphScrambleWorksheet = await generateWithSchema<{scrambledParagraphs: string[], correctOrder: number[]}>(paragraphScramblePrompt, paraScrambleSchema).then(item => ({...item, id: crypto.randomUUID()}));
+
+  const analysisResult = await generateWithSchema<{koreanTopic: string, englishTitle: string, koreanSummary: string, textFlow: string[]}>(analysisPrompt, analysisSchema);
+  
+  // Expanded vocabulary depends on the initial vocabulary list
   const expandedVocabPrompt = `For the following vocabulary list, provide an English definition (영영풀이), a synonym (동의어), and an antonym (반의어) for each word, suitable for a ${grade} student.
   
   Vocabulary: ${vocabulary.map(v => v.word).join(', ')}`;
@@ -167,7 +170,6 @@ English Text: "${englishText}"`;
           antonym: expansion?.antonym || 'N/A',
       };
   });
-
 
   return {
     vocabulary,
