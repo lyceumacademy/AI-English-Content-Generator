@@ -1,6 +1,5 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
-import { GeneratedContent, PassageResult } from '../types';
+import { GeneratedContent, PassageInput, PassageResult } from '../types';
 
 const API_KEY = process.env.API_KEY;
 if (!API_KEY) {
@@ -183,16 +182,26 @@ English Text: "${englishText}"`;
 
 export const generateAllContent = async (
   passages: { english: string; korean: string }[],
-  grade: string
+  grade: string,
+  onProgress: (progress: { current: number; total: number }) => void
 ): Promise<PassageResult[]> => {
-    const promises = passages.map(passage => 
-        generateContentForSinglePassage(passage.english, passage.korean, grade)
-    );
+    const allResults: PassageResult[] = [];
+    const totalPassages = passages.length;
 
-    const allGeneratedContents = await Promise.all(promises);
+    for (const [index, passage] of passages.entries()) {
+        try {
+            onProgress({ current: index + 1, total: totalPassages });
+            const content = await generateContentForSinglePassage(passage.english, passage.korean, grade);
+            allResults.push({
+                passage: { ...passage, id: crypto.randomUUID() },
+                content: content,
+            });
+        } catch (error) {
+            console.error(`Error processing passage ${index + 1}:`, error);
+            // Optionally, you can decide to stop or continue on error
+            throw new Error(`Failed to process passage ${index + 1}.`);
+        }
+    }
 
-    return passages.map((passage, index) => ({
-        passage: { ...passage, id: crypto.randomUUID() },
-        content: allGeneratedContents[index],
-    }));
+    return allResults;
 };

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { InputForm } from './components/InputForm';
 import { ContentDisplay } from './components/ContentDisplay';
@@ -16,6 +15,7 @@ const App: React.FC = () => {
   const [title, setTitle] = useState('');
   const [storedMaterials, setStoredMaterials] = useState<StoredMaterial[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
 
   const handleGenerate = async (
     passages: { english: string; korean: string }[],
@@ -25,8 +25,13 @@ const App: React.FC = () => {
   ) => {
     setStep('generating');
     setTitle(title);
+    setProgress({ current: 0, total: passages.length });
     try {
-      const generatedResults = await generateAllContent(passages, grade);
+      const generatedResults = await generateAllContent(
+        passages,
+        grade,
+        (p) => setProgress(p)
+      );
       setResults(generatedResults);
       setStep('display');
     } catch (error) {
@@ -105,7 +110,7 @@ const App: React.FC = () => {
       case 'input':
         return <InputForm onGenerate={handleGenerate} onShowHistory={handleShowHistory} isHistoryLoading={isLoadingHistory} />;
       case 'generating':
-        return <Loader />;
+        return <Loader progress={progress} />;
       case 'display':
         return results ? <ContentDisplay results={results} title={title} onContentChange={handleContentChange} onBack={handleBackToInput} onSave={handleSave}/> : <p>No content generated.</p>;
       case 'history':
