@@ -60,3 +60,13 @@ export interface PassageResult {
     passage: PassageInput;
     content: GeneratedContent;
 }
+
+export interface StoredMaterial {
+    docId: string;
+    title: string;
+    createdAt: {
+        seconds: number;
+        nanoseconds: number;
+    };
+    results: PassageResult[];
+}

@@ -351,13 +351,15 @@ interface ContentDisplayProps {
   title: string;
   onContentChange: (passageId: string, type: ContentType, data: GeneratedContent[ContentType]) => void;
   onBack: () => void;
+  onSave: () => Promise<void>;
 }
 
-export const ContentDisplay: React.FC<ContentDisplayProps> = ({ results, title, onContentChange, onBack }) => {
+export const ContentDisplay: React.FC<ContentDisplayProps> = ({ results, title, onContentChange, onBack, onSave }) => {
     const [activePassageIndex, setActivePassageIndex] = useState(0);
     const [activeTab, setActiveTab] = useState('vocabulary');
     const [isDownloadMenuOpen, setDownloadMenuOpen] = useState(false);
     const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
     const downloadMenuRef = useRef<HTMLDivElement>(null);
 
     const activeResult = results[activePassageIndex];
@@ -382,6 +384,12 @@ export const ContentDisplay: React.FC<ContentDisplayProps> = ({ results, title, 
         }
     };
     
+    const handleSaveClick = async () => {
+        setIsSaving(true);
+        await onSave();
+        setIsSaving(false);
+    };
+
     const generateTextContent = () => {
         let text = `AI 생성 영어 학습자료: ${title}\n\n`;
         
@@ -503,6 +511,26 @@ export const ContentDisplay: React.FC<ContentDisplayProps> = ({ results, title, 
                 className="px-6 py-2 bg-gray-700 text-white font-semibold rounded-lg shadow-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-75 transition-transform transform hover:-translate-y-0.5"
             >
                 &larr; 새로 만들기
+            </button>
+            <button
+                onClick={handleSaveClick}
+                disabled={isSaving}
+                className="px-6 py-2 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-75 transition-transform transform hover:-translate-y-0.5 flex items-center gap-2"
+            >
+                {isSaving ? (
+                    <>
+                        <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        저장 중...
+                    </>
+                ) : (
+                    <>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v10a2 2 0 01-2 2H7a2 2 0 01-2-2V4zm3 1a1 1 0 00-1 1v6a1 1 0 102 0V6a1 1 0 00-1-1z" /></svg>
+                        저장하기
+                    </>
+                )}
             </button>
              <div className="relative" ref={downloadMenuRef}>
                 <button
