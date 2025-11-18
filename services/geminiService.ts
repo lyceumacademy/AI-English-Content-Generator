@@ -7,6 +7,8 @@ if (!API_KEY) {
 }
 const ai = new GoogleGenAI({ apiKey: API_KEY });
 
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 const generateWithSchema = async <T,>(prompt: string, schema: any): Promise<T> => {
   try {
     const response = await ai.models.generateContent({
@@ -123,23 +125,29 @@ English Text: "${englishText}"`;
         required: ['koreanTopic', 'englishTitle', 'koreanSummary', 'textFlow']
     };
     
-  // --- Sequential Generation ---
+  // --- Sequential Generation with Delays ---
   
   const vocabularyData = await generateWithSchema<{word: string, meaning: string}[]>(vocabularyPrompt, vocabSchema);
+  await delay(1000);
   const vocabulary = vocabularyData.map(item => ({...item, id: crypto.randomUUID()}));
   
   const translatedSentencesData = await generateWithSchema<{english: string, korean: string}[]>(translationPrompt, translationSchema);
+  await delay(1000);
   const translatedSentences = translatedSentencesData.map(item => ({...item, id: crypto.randomUUID()}));
 
   const multipleChoiceWorksheetData = await generateWithSchema<{sentence: string, answer: string}[]>(multipleChoicePrompt, mcqSchema);
+  await delay(1000);
   const multipleChoiceWorksheet = multipleChoiceWorksheetData.map(item => ({...item, id: crypto.randomUUID()}));
 
   const sentenceScrambleWorksheetData = await generateWithSchema<{scrambled: string[], correct: string}[]>(sentenceScramblePrompt, scrambleSchema);
+  await delay(1000);
   const sentenceScrambleWorksheet = sentenceScrambleWorksheetData.map(item => ({...item, id: crypto.randomUUID()}));
 
   const paragraphScrambleWorksheet = await generateWithSchema<{scrambledParagraphs: string[], correctOrder: number[]}>(paragraphScramblePrompt, paraScrambleSchema).then(item => ({...item, id: crypto.randomUUID()}));
+  await delay(1000);
 
   const analysisResult = await generateWithSchema<{koreanTopic: string, englishTitle: string, koreanSummary: string, textFlow: string[]}>(analysisPrompt, analysisSchema);
+  await delay(1000);
   
   // Expanded vocabulary depends on the initial vocabulary list
   const expandedVocabPrompt = `For the following vocabulary list, provide an English definition (영영풀이), a synonym (동의어), and an antonym (반의어) for each word, suitable for a ${grade} student.
@@ -182,8 +190,6 @@ English Text: "${englishText}"`;
   };
 };
 
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
 export const generateAllContent = async (
   passages: { english: string; korean: string }[],
   grade: string,
@@ -201,7 +207,7 @@ export const generateAllContent = async (
                 content: content,
             });
             
-            // Add a 1-second delay after each successful passage processing
+            // This delay is now an extra precaution on top of the intra-passage delays.
             if (index < totalPassages - 1) {
                 await delay(1000);
             }
