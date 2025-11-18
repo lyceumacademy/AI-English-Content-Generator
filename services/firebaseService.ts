@@ -1,3 +1,4 @@
+
 import { db } from '../firebase/config';
 import { collection, addDoc, getDocs, deleteDoc, doc, serverTimestamp, orderBy, query } from 'firebase/firestore';
 import { PassageResult, StoredMaterial } from '../types';
