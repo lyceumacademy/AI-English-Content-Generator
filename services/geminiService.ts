@@ -9,23 +9,36 @@ const ai = new GoogleGenAI({ apiKey: API_KEY });
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-const generateWithSchema = async <T,>(prompt: string, schema: any): Promise<T> => {
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: schema,
-      },
-    });
-    const jsonText = response.text.trim();
-    return JSON.parse(jsonText) as T;
-  } catch (error) {
-    console.error("Error generating content with schema:", error);
-    throw new Error("Failed to generate content from AI.");
+// Wrapper function with exponential backoff retry logic
+const generateWithRetry = async <T,>(prompt: string, schema: any, maxRetries = 5): Promise<T> => {
+  let attempt = 0;
+  while (attempt < maxRetries) {
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: schema,
+        },
+      });
+      const jsonText = response.text.trim();
+      return JSON.parse(jsonText) as T;
+    } catch (error) {
+      attempt++;
+      if (attempt >= maxRetries) {
+        console.error(`Failed after ${maxRetries} attempts.`, error);
+        throw error; // Re-throw the error after all retries have failed
+      }
+      const backoffTime = Math.pow(2, attempt) * 1000 + Math.random() * 1000; // Exponential backoff with jitter
+      console.warn(`Attempt ${attempt} failed. Retrying in ${backoffTime.toFixed(0)}ms...`, error);
+      await delay(backoffTime);
+    }
   }
+  // This line should theoretically not be reached, but it's here for type safety.
+  throw new Error("Exhausted all retries and failed to generate content.");
 };
+
 
 const generateContentForSinglePassage = async (
   englishText: string,
@@ -125,29 +138,23 @@ English Text: "${englishText}"`;
         required: ['koreanTopic', 'englishTitle', 'koreanSummary', 'textFlow']
     };
     
-  // --- Sequential Generation with Delays ---
+  // --- Sequential Generation with Retries ---
   
-  const vocabularyData = await generateWithSchema<{word: string, meaning: string}[]>(vocabularyPrompt, vocabSchema);
-  await delay(1000);
+  const vocabularyData = await generateWithRetry<{word: string, meaning: string}[]>(vocabularyPrompt, vocabSchema);
   const vocabulary = vocabularyData.map(item => ({...item, id: crypto.randomUUID()}));
   
-  const translatedSentencesData = await generateWithSchema<{english: string, korean: string}[]>(translationPrompt, translationSchema);
-  await delay(1000);
+  const translatedSentencesData = await generateWithRetry<{english: string, korean: string}[]>(translationPrompt, translationSchema);
   const translatedSentences = translatedSentencesData.map(item => ({...item, id: crypto.randomUUID()}));
 
-  const multipleChoiceWorksheetData = await generateWithSchema<{sentence: string, answer: string}[]>(multipleChoicePrompt, mcqSchema);
-  await delay(1000);
+  const multipleChoiceWorksheetData = await generateWithRetry<{sentence: string, answer: string}[]>(multipleChoicePrompt, mcqSchema);
   const multipleChoiceWorksheet = multipleChoiceWorksheetData.map(item => ({...item, id: crypto.randomUUID()}));
 
-  const sentenceScrambleWorksheetData = await generateWithSchema<{scrambled: string[], correct: string}[]>(sentenceScramblePrompt, scrambleSchema);
-  await delay(1000);
+  const sentenceScrambleWorksheetData = await generateWithRetry<{scrambled: string[], correct: string}[]>(sentenceScramblePrompt, scrambleSchema);
   const sentenceScrambleWorksheet = sentenceScrambleWorksheetData.map(item => ({...item, id: crypto.randomUUID()}));
 
-  const paragraphScrambleWorksheet = await generateWithSchema<{scrambledParagraphs: string[], correctOrder: number[]}>(paragraphScramblePrompt, paraScrambleSchema).then(item => ({...item, id: crypto.randomUUID()}));
-  await delay(1000);
-
-  const analysisResult = await generateWithSchema<{koreanTopic: string, englishTitle: string, koreanSummary: string, textFlow: string[]}>(analysisPrompt, analysisSchema);
-  await delay(1000);
+  const paragraphScrambleWorksheet = await generateWithRetry<{scrambledParagraphs: string[], correctOrder: number[]}>(paragraphScramblePrompt, paraScrambleSchema).then(item => ({...item, id: crypto.randomUUID()}));
+  
+  const analysisResult = await generateWithRetry<{koreanTopic: string, englishTitle: string, koreanSummary: string, textFlow: string[]}>(analysisPrompt, analysisSchema);
   
   // Expanded vocabulary depends on the initial vocabulary list
   const expandedVocabPrompt = `For the following vocabulary list, provide an English definition (영영풀이), a synonym (동의어), and an antonym (반의어) for each word, suitable for a ${grade} student.
@@ -167,7 +174,7 @@ English Text: "${englishText}"`;
     }
   };
 
-  const expandedVocabData = await generateWithSchema<{word: string, definition: string, synonym: string, antonym: string}[]>(expandedVocabPrompt, expVocabSchema);
+  const expandedVocabData = await generateWithRetry<{word: string, definition: string, synonym: string, antonym: string}[]>(expandedVocabPrompt, expVocabSchema);
 
   const expandedVocabulary = vocabulary.map(v => {
       const expansion = expandedVocabData.find(e => e.word.toLowerCase() === v.word.toLowerCase());
@@ -206,18 +213,17 @@ export const generateAllContent = async (
                 passage: { ...passage, id: crypto.randomUUID() },
                 content: content,
             });
-            
-            // This delay is now an extra precaution on top of the intra-passage delays.
-            if (index < totalPassages - 1) {
-                await delay(1000);
-            }
-
         } catch (error) {
             console.error(`Error processing passage ${index + 1}:`, error);
-            // Optionally, you can decide to stop or continue on error
-            throw new Error(`Failed to process passage ${index + 1}.`);
+            // Skip this passage and continue with the next ones.
+            // A more advanced implementation could push an error state to the results array.
+            alert(`지문 #${index + 1} 처리 중 오류가 발생하여 건너뛰었습니다. 나머지 지문은 계속 처리됩니다.`);
         }
     }
 
+    if (allResults.length === 0 && passages.length > 0) {
+        throw new Error("모든 지문 처리 중 오류가 발생했습니다. 입력 내용을 확인하거나 잠시 후 다시 시도해주세요.");
+    }
+    
     return allResults;
 };
