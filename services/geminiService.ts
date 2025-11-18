@@ -182,6 +182,8 @@ English Text: "${englishText}"`;
   };
 };
 
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export const generateAllContent = async (
   passages: { english: string; korean: string }[],
   grade: string,
@@ -198,6 +200,12 @@ export const generateAllContent = async (
                 passage: { ...passage, id: crypto.randomUUID() },
                 content: content,
             });
+            
+            // Add a 1-second delay after each successful passage processing
+            if (index < totalPassages - 1) {
+                await delay(1000);
+            }
+
         } catch (error) {
             console.error(`Error processing passage ${index + 1}:`, error);
             // Optionally, you can decide to stop or continue on error
